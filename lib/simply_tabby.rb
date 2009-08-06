@@ -65,7 +65,7 @@ class SimplyTabby
     :public => {
       :application_revision => self.revision_number,
       :environment => RAILS_ENV,
-      :hostname => Socket.gethostname.split(/\./)[0..1].join('-')
+      :hostname => Socket.gethostname.downcase.match(/^([a-z])[a-z]+(\d+)\.([a-z]+)/)[1..3] rescue nil
     },
     :crypt => {
       :database_adapter => (ActiveRecord::Base.configurations[RAILS_ENV]['adapter'] rescue nil),
