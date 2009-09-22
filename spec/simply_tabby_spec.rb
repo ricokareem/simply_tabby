@@ -8,7 +8,7 @@ describe SimplyTabby do
     end
 
     it "returns the overriden release file" do
-      SimplyTabby.settings = {:version_file => :foo}
+      SimplyTabby.settings = {:release_file => :foo}
 
       SimplyTabby.release_file.should == :foo
     end
