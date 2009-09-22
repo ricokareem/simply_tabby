@@ -1,76 +1,103 @@
 require File.join(File.dirname(__FILE__), 'spec_helper')
 
 describe SimplyTabby do
-  describe "revision_number class method" do
-    it "should return revision number" do
-      @file = mock('file')
-      File.should_receive(:exist?).and_return(true)
-      File.should_receive(:open).and_return(@file)
-      @file.should_receive(:readline).and_return('r123')
-      SimplyTabby.revision_number.should be_eql('r123')
-    end
-
-    it "should _not return revision number" do
-      File.should_receive(:exist?).and_return(false)
-      SimplyTabby.revision_number.should be_eql('No revision found')
-    end
-  end
-
-  describe "display_system_information class method" do
-    it "should display system information and return a hash" do
-      SimplyTabby.display_system_information.should be_an_instance_of(Hash)
-    end
-  end
-
-  describe "display_crypt_system_information class method" do
-    it "should display crypt system information and return a crypt" do
-      SimplyTabby.display_crypt_system_information.should be_an_instance_of(String)
-    end
-
-    it "returns nil if ezcrypto is not installed" do
-      begin
-        old_crypto = SimplyTabby::NO_CRYPTO
-        without_warnings do
-          SimplyTabby::NO_CRYPTO = true
-        end
-
-        SimplyTabby.display_crypt_system_information.should be_nil
-      ensure
-        SimplyTabby::NO_CRYPTO = old_crypto
-      end
-    end
-  end
-
-  describe "reload object" do
-    before(:each) do
-      ### Force a reload of SimplyTabby class, since our setters modify class variables.
+  describe :release_file do
+    after(:each) do
       Object.send(:remove_const, 'SimplyTabby')
-      load File.join(File.dirname(__FILE__), '../lib', 'simply_tabby.rb')
+      load File.join(File.dirname(__FILE__), '..', 'lib', 'simply_tabby.rb')
     end
 
-    describe "remove_system_information class method" do
-      it "should remove one element and return public(hash.keys - 1)" do
-        SimplyTabby.display_system_information[:public].should have_key(:application_revision)
-        SimplyTabby.remove_system_information(:public, :application_revision)
-        SimplyTabby.display_system_information[:public].should_not have_key(:application_revision)
+    it "returns the overriden release file" do
+      SimplyTabby.settings = {:version_file => :foo}
+
+      SimplyTabby.release_file.should == :foo
+    end
+
+    it "returns the default release file" do
+      Rails.stub!(:root).and_return('/rails_root')
+
+      SimplyTabby.release_file.should == '/rails_root/VERSION'
+    end
+  end
+
+  describe :release_metadata do
+    describe :file_exists do
+      before(:each) do
+        File.should_receive(:exist?).and_return(true)
+      end
+
+      it "returns a YAML reference to release_file" do
+        SimplyTabby.should_receive(:release_file).twice.and_return(:release_file)
+        File.should_receive(:read).with(:release_file).and_return('foo: bar')
+
+        SimplyTabby.release_metadata.should == {"foo" => "bar"}
+      end
+
+      it "returns empty hash when File#read fails" do
+        File.should_receive(:read).and_raise(Errno::ENOENT)
+
+        SimplyTabby.release_metadata.should == {}
       end
     end
 
-    load File.join(File.dirname(__FILE__), '../lib', 'simply_tabby.rb')
-    describe "add_system_information class method" do
-      it "should add one element and return public(hash.keys + 1)" do
-        SimplyTabby.display_system_information[:public].should_not have_key(:foo)
-        SimplyTabby.add_system_information(:public, :foo => 1)
-        SimplyTabby.display_system_information[:public].should have_key(:foo)
-      end
+    it "returns empty hash when missing release_file" do
+      SimplyTabby.release_metadata.should == {}
+    end
+  end
+
+  describe :data do
+    after(:each) do
+      Object.send(:remove_const, 'SimplyTabby')
+      load File.join(File.dirname(__FILE__), '..', 'lib', 'simply_tabby.rb')
+    end
+
+    it "returns environment" do
+      Rails.stub!(:env).and_return(:environment)
+
+      SimplyTabby.data[:environment].should == :environment
+    end
+
+    it "returns obfuscated hostname" do
+      Socket.stub!(:gethostname).and_return('ab01.cd1.domain.com')
+
+      SimplyTabby.data[:hostname].should == 'a01cd'
+    end
+
+    it "returns hostname when hostname doesn't match obfuscation" do
+      Socket.stub!(:gethostname).and_return('hostname.domain.com')
+
+      SimplyTabby.data[:hostname].should == 'hostname.domain.com'
+    end
+
+    it "returns default data" do
+      keys = SimplyTabby.data.dup
+      keys.delete(:environment)
+      keys.delete(:hostname)
+
+      keys.should be_empty
+    end
+
+    it "merges on additional keys" do
+      SimplyTabby.should_receive(:release_metadata).and_return(:foo => :bar, :baz => :xyzzy)
+      keys = SimplyTabby.data
+
+      keys[:foo].should == :bar
+      keys[:baz].should == :xyzzy
     end
   end
 
   describe :do_tell do
-    it 'does not raise an exception when display_crypt_system_information is nil' do
-      SimplyTabby.should_receive(:display_crypt_system_information).and_return(nil)
+    it "surrounds with comments" do
+      tabby = SimplyTabby.do_tell.split("\n")
 
-      lambda{SimplyTabby.do_tell}.should_not raise_error
+      tabby[0].should  == '<!-- SimplyTabby'
+      tabby[-1].should == '-->'
+    end
+
+    it "doesn't surround with comments" do
+      tabby = SimplyTabby.do_tell(:no_comment => true).split("\n")
+
+      tabby.should_not == /--/
     end
   end
 end
