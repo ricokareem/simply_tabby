@@ -19,7 +19,7 @@ class SimplyTabby
 
       @@data ||= {
         :environment => Rails.env,
-        :hostname => (@hostname.match(/^([a-z])[a-z]+(\d+)\.([a-z]+)/)[1..3].join rescue @hostname)
+        :hostname => (@hostname.match(/^([a-z])[a-z,-]+(\d*)\.([a-z]+)/)[1..3].join rescue @hostname)
       }.merge(release_metadata)
     end
 
